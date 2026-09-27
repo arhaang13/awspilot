@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import contextlib
 import datetime as dt
+import http.client
 import json
+import time
+import urllib.error
 import urllib.request
 from collections.abc import Callable, Iterator
 from dataclasses import replace
@@ -54,6 +57,38 @@ class BenchReport(BaseModel):
         return sum(t.success for t in self.trials) / len(self.trials) if self.trials else 0.0
 
 
+def _restart_localstack(endpoint_url: str, timeout: float = 60.0) -> None:
+    """Reset all in-memory state via the health endpoint's restart action.
+
+    There is no dedicated state-reset route; `POST /_localstack/health` with
+    `{"action": "restart"}` is LocalStack's own documented way to clear state
+    between test runs. The container drops connections while it restarts, so
+    poll the health endpoint until it answers again.
+    """
+    body = json.dumps({"action": "restart"}).encode()
+    req = urllib.request.Request(  # noqa: S310
+        f"{endpoint_url}/_localstack/health", data=body, method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    with contextlib.suppress(urllib.error.URLError, OSError, http.client.HTTPException):
+        urllib.request.urlopen(req, timeout=5).close()  # noqa: S310
+
+    deadline = time.monotonic() + timeout
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        try:
+            urllib.request.urlopen(  # noqa: S310
+                f"{endpoint_url}/_localstack/health", timeout=5
+            ).close()
+            return
+        except (urllib.error.URLError, OSError, http.client.HTTPException) as exc:
+            # The container tears down its listener mid-restart, so a connection
+            # reset or an empty response here just means "not ready yet".
+            last_error = exc
+            time.sleep(1)
+    raise RuntimeError(f"LocalStack did not come back healthy after a restart: {last_error}")
+
+
 @contextlib.contextmanager
 def clean_backend(settings: Settings) -> Iterator[None]:
     if settings.target == "moto":
@@ -62,9 +97,7 @@ def clean_backend(settings: Settings) -> Iterator[None]:
         with mock_aws(config={"iam": {"load_aws_managed_policies": True}}):
             yield
     elif settings.target == "localstack":
-        req = urllib.request.Request(f"{settings.endpoint_url}/_localstack/state/reset",
-                                     method="POST")
-        urllib.request.urlopen(req, timeout=30).close()  # noqa: S310
+        _restart_localstack(str(settings.endpoint_url))
         yield
     else:
         raise ValueError("the benchmark only runs against localstack or moto, never real AWS")
