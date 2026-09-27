@@ -18,6 +18,8 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import BaseModel, Field
 
 from awspilot import engine
@@ -63,7 +65,11 @@ def _restart_localstack(endpoint_url: str, timeout: float = 60.0) -> None:
     There is no dedicated state-reset route; `POST /_localstack/health` with
     `{"action": "restart"}` is LocalStack's own documented way to clear state
     between test runs. The container drops connections while it restarts, so
-    poll the health endpoint until it answers again.
+    poll until the process supervisor answers again, then probe an actual
+    service: the supervisor comes back before individual services (SQS, in
+    particular) have finished re-initializing, and a real request against one
+    of them - not just the health route - is what proves the backend is
+    actually ready to take calls.
     """
     body = json.dumps({"action": "restart"}).encode()
     req = urllib.request.Request(  # noqa: S310
@@ -80,13 +86,27 @@ def _restart_localstack(endpoint_url: str, timeout: float = 60.0) -> None:
             urllib.request.urlopen(  # noqa: S310
                 f"{endpoint_url}/_localstack/health", timeout=5
             ).close()
-            return
+            break
         except (urllib.error.URLError, OSError, http.client.HTTPException) as exc:
             # The container tears down its listener mid-restart, so a connection
             # reset or an empty response here just means "not ready yet".
             last_error = exc
             time.sleep(1)
-    raise RuntimeError(f"LocalStack did not come back healthy after a restart: {last_error}")
+    else:
+        raise RuntimeError(f"LocalStack did not come back healthy after a restart: {last_error}")
+
+    probe = boto3.client(
+        "s3", endpoint_url=endpoint_url, region_name="us-east-1",
+        aws_access_key_id="test", aws_secret_access_key="test",
+    )
+    while time.monotonic() < deadline:
+        try:
+            probe.list_buckets()
+            return
+        except (BotoCoreError, ClientError) as exc:
+            last_error = exc
+            time.sleep(1)
+    raise RuntimeError(f"LocalStack services were not ready after a restart: {last_error}")
 
 
 @contextlib.contextmanager
