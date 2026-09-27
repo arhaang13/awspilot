@@ -1,0 +1,84 @@
+id: sqs-queue-with-dlq
+area: messaging
+request: Create an SQS queue named orders with a dead-letter queue named orders-dlq. Messages go to the
+  dead-letter queue after 5 failed receives.
+baseline_minutes: 5
+guidance:
+- Create the dead-letter queue first and read its ARN with get_queue_attributes.
+- RedrivePolicy is a JSON string with deadLetterTargetArn and maxReceiveCount.
+checks:
+- id: main_queue
+  description: main queue exists
+  call:
+    service: sqs
+    operation: get_queue_url
+    params:
+      QueueName: orders
+  expect:
+  - path: QueueUrl
+    exists: true
+- description: dead-letter queue exists
+  call:
+    service: sqs
+    operation: get_queue_url
+    params:
+      QueueName: orders-dlq
+  expect:
+  - path: QueueUrl
+    exists: true
+- description: redrive policy points at the dead-letter queue
+  call:
+    service: sqs
+    operation: get_queue_attributes
+    params:
+      QueueUrl: ${steps.main_queue.QueueUrl}
+      AttributeNames:
+      - RedrivePolicy
+  expect:
+  - path: Attributes.RedrivePolicy
+    contains: orders-dlq
+  - path: Attributes.RedrivePolicy
+    contains: '5'
+reference:
+  summary: Create an SQS queue named orders with a dead-letter queue named orders-dlq. Messages go to
+    the dead-letter queue after 5 failed receives.
+  steps:
+  - id: create_dlq
+    description: Create the dead-letter queue
+    call:
+      service: sqs
+      operation: create_queue
+      params:
+        QueueName: orders-dlq
+    rollback:
+      service: sqs
+      operation: delete_queue
+      params:
+        QueueUrl: ${steps.create_dlq.QueueUrl}
+  - id: dlq_arn
+    description: Look up the dead-letter queue ARN
+    call:
+      service: sqs
+      operation: get_queue_attributes
+      params:
+        QueueUrl: ${steps.create_dlq.QueueUrl}
+        AttributeNames:
+        - QueueArn
+    depends_on:
+    - create_dlq
+  - id: create_queue
+    description: Create the main queue
+    call:
+      service: sqs
+      operation: create_queue
+      params:
+        QueueName: orders
+        Attributes:
+          RedrivePolicy: '{"deadLetterTargetArn":"${steps.dlq_arn.Attributes.QueueArn}","maxReceiveCount":"5"}'
+    depends_on:
+    - dlq_arn
+    rollback:
+      service: sqs
+      operation: delete_queue
+      params:
+        QueueUrl: ${steps.create_queue.QueueUrl}

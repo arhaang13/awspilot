@@ -1,0 +1,63 @@
+[project]
+name = "awspilot"
+version = "0.1.0"
+description = "Agentic AWS workflow automation: plain-English request -> reviewed plan -> verified resources."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Arhaan Garg" }]
+requires-python = ">=3.11"
+dependencies = [
+    "boto3>=1.35",
+    "jmespath>=1.0",
+    "langgraph>=0.2.60",
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+    "rich>=13.7",
+    "typer>=0.12",
+]
+
+[project.optional-dependencies]
+anthropic = ["anthropic>=0.60"]
+openai = ["openai>=1.50"]
+console = ["playwright>=1.47"]
+
+[project.scripts]
+awspilot = "awspilot.cli:app"
+
+[dependency-groups]
+dev = [
+    "moto[all]>=5.0",
+    "mypy>=1.11",
+    "pytest>=8.0",
+    "ruff>=0.6",
+    "types-pyyaml",
+    "boto3-stubs",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/awspilot"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src"]
+
+[[tool.mypy.overrides]]
+module = ["jmespath.*", "botocore.*", "boto3.*", "moto.*", "playwright.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: needs a running LocalStack"]
+addopts = "-m 'not integration'"

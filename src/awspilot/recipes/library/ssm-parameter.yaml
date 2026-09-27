@@ -1,0 +1,40 @@
+id: ssm-parameter
+area: config
+request: Store a Systems Manager parameter named /checkout/api-timeout with the value 30 as a plain String,
+  tagged env=dev.
+baseline_minutes: 3
+guidance:
+- Tags cannot be combined with Overwrite in put_parameter.
+checks:
+- description: parameter holds the value
+  call:
+    service: ssm
+    operation: get_parameter
+    params:
+      Name: /checkout/api-timeout
+  expect:
+  - path: Parameter.Value
+    equals: '30'
+  - path: Parameter.Type
+    equals: String
+reference:
+  summary: Store a Systems Manager parameter named /checkout/api-timeout with the value 30 as a plain
+    String, tagged env=dev.
+  steps:
+  - id: put_parameter
+    description: Store the parameter
+    call:
+      service: ssm
+      operation: put_parameter
+      params:
+        Name: /checkout/api-timeout
+        Value: '30'
+        Type: String
+        Tags:
+        - Key: env
+          Value: dev
+    rollback:
+      service: ssm
+      operation: delete_parameter
+      params:
+        Name: /checkout/api-timeout

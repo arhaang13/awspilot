@@ -1,0 +1,70 @@
+id: kms-key-with-alias
+area: security
+request: Create a symmetric KMS key for encrypting application data, with the alias alias/app-data and
+  automatic key rotation turned on.
+baseline_minutes: 5
+guidance:
+- Aliases must start with alias/. Rotation is enable_key_rotation.
+- Roll back a key with schedule_key_deletion; keys cannot be deleted immediately.
+checks:
+- id: aliases
+  description: alias exists
+  call:
+    service: kms
+    operation: list_aliases
+    params: {}
+  expect:
+  - path: Aliases[?AliasName=='alias/app-data'] | [0].TargetKeyId
+    exists: true
+- description: rotation is on
+  call:
+    service: kms
+    operation: get_key_rotation_status
+    params:
+      KeyId: "${steps.aliases.Aliases[?AliasName=='alias/app-data'] | [0].TargetKeyId}"
+  expect:
+  - path: KeyRotationEnabled
+    equals: true
+reference:
+  summary: Create a symmetric KMS key for encrypting application data, with the alias alias/app-data and
+    automatic key rotation turned on.
+  steps:
+  - id: create_key
+    description: Create the key
+    call:
+      service: kms
+      operation: create_key
+      params:
+        Description: Application data
+        KeySpec: SYMMETRIC_DEFAULT
+        KeyUsage: ENCRYPT_DECRYPT
+    rollback:
+      service: kms
+      operation: schedule_key_deletion
+      params:
+        KeyId: ${steps.create_key.KeyMetadata.KeyId}
+        PendingWindowInDays: 7
+  - id: create_alias
+    description: Create the alias
+    call:
+      service: kms
+      operation: create_alias
+      params:
+        AliasName: alias/app-data
+        TargetKeyId: ${steps.create_key.KeyMetadata.KeyId}
+    depends_on:
+    - create_key
+    rollback:
+      service: kms
+      operation: delete_alias
+      params:
+        AliasName: alias/app-data
+  - id: enable_rotation
+    description: Turn on rotation
+    call:
+      service: kms
+      operation: enable_key_rotation
+      params:
+        KeyId: ${steps.create_key.KeyMetadata.KeyId}
+    depends_on:
+    - create_key

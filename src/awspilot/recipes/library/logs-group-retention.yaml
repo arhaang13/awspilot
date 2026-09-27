@@ -1,0 +1,41 @@
+id: logs-group-retention
+area: observability
+request: Create a CloudWatch Logs log group named /app/checkout and keep its logs for 30 days.
+baseline_minutes: 3
+guidance:
+- Retention is a separate put_retention_policy call.
+checks:
+- description: retention is 30 days
+  call:
+    service: logs
+    operation: describe_log_groups
+    params:
+      logGroupNamePrefix: /app/checkout
+  expect:
+  - path: logGroups[?logGroupName=='/app/checkout'] | [0].retentionInDays
+    equals: 30
+reference:
+  summary: Create a CloudWatch Logs log group named /app/checkout and keep its logs for 30 days.
+  steps:
+  - id: create_group
+    description: Create the log group
+    call:
+      service: logs
+      operation: create_log_group
+      params:
+        logGroupName: /app/checkout
+    rollback:
+      service: logs
+      operation: delete_log_group
+      params:
+        logGroupName: /app/checkout
+  - id: set_retention
+    description: Set retention
+    call:
+      service: logs
+      operation: put_retention_policy
+      params:
+        logGroupName: /app/checkout
+        retentionInDays: 30
+    depends_on:
+    - create_group

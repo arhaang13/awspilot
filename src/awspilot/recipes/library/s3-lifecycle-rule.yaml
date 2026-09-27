@@ -1,0 +1,59 @@
+id: s3-lifecycle-rule
+area: s3
+request: Create an S3 bucket named awspilot-demo-logs with a lifecycle rule that moves objects under logs/
+  to Glacier after 30 days and deletes them after 365 days.
+baseline_minutes: 7
+guidance:
+- Lifecycle rules use put_bucket_lifecycle_configuration with a Filter, not the deprecated top-level Prefix.
+checks:
+- description: lifecycle rule is in place
+  call:
+    service: s3
+    operation: get_bucket_lifecycle_configuration
+    params:
+      Bucket: awspilot-demo-logs
+  expect:
+  - path: Rules[0].Status
+    equals: Enabled
+  - path: Rules[0].Transitions[0].Days
+    equals: 30
+  - path: Rules[0].Transitions[0].StorageClass
+    equals: GLACIER
+  - path: Rules[0].Expiration.Days
+    equals: 365
+reference:
+  summary: Create an S3 bucket named awspilot-demo-logs with a lifecycle rule that moves objects under
+    logs/ to Glacier after 30 days and deletes them after 365 days.
+  steps:
+  - id: create_bucket
+    description: Create the bucket
+    call:
+      service: s3
+      operation: create_bucket
+      params:
+        Bucket: awspilot-demo-logs
+    rollback:
+      service: s3
+      operation: delete_bucket
+      params:
+        Bucket: awspilot-demo-logs
+  - id: add_lifecycle
+    description: Add the lifecycle rule
+    call:
+      service: s3
+      operation: put_bucket_lifecycle_configuration
+      params:
+        Bucket: awspilot-demo-logs
+        LifecycleConfiguration:
+          Rules:
+          - ID: expire-old-logs
+            Status: Enabled
+            Filter:
+              Prefix: logs/
+            Transitions:
+            - Days: 30
+              StorageClass: GLACIER
+            Expiration:
+              Days: 365
+    depends_on:
+    - create_bucket

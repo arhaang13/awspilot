@@ -1,0 +1,90 @@
+id: events-scheduled-rule-to-queue
+area: events
+request: Create an EventBridge rule named nightly-report that runs every day at 02:00 UTC and sends its
+  event to a new SQS queue named nightly-report-jobs.
+baseline_minutes: 7
+guidance:
+- The schedule is cron(0 2 * * ? *). Targets are added with put_targets using the queue ARN.
+- Roll back targets with remove_targets before deleting the rule.
+checks:
+- description: rule has the schedule
+  call:
+    service: events
+    operation: describe_rule
+    params:
+      Name: nightly-report
+  expect:
+  - path: ScheduleExpression
+    equals: cron(0 2 * * ? *)
+  - path: State
+    equals: ENABLED
+- description: rule targets the queue
+  call:
+    service: events
+    operation: list_targets_by_rule
+    params:
+      Rule: nightly-report
+  expect:
+  - path: Targets[0].Arn
+    contains: nightly-report-jobs
+reference:
+  summary: Create an EventBridge rule named nightly-report that runs every day at 02:00 UTC and sends
+    its event to a new SQS queue named nightly-report-jobs.
+  steps:
+  - id: create_queue
+    description: Create the queue
+    call:
+      service: sqs
+      operation: create_queue
+      params:
+        QueueName: nightly-report-jobs
+    rollback:
+      service: sqs
+      operation: delete_queue
+      params:
+        QueueUrl: ${steps.create_queue.QueueUrl}
+  - id: queue_arn
+    description: Look up the queue ARN
+    call:
+      service: sqs
+      operation: get_queue_attributes
+      params:
+        QueueUrl: ${steps.create_queue.QueueUrl}
+        AttributeNames:
+        - QueueArn
+    depends_on:
+    - create_queue
+  - id: create_rule
+    description: Create the rule
+    call:
+      service: events
+      operation: put_rule
+      params:
+        Name: nightly-report
+        ScheduleExpression: cron(0 2 * * ? *)
+        State: ENABLED
+    rollback:
+      service: events
+      operation: delete_rule
+      params:
+        Name: nightly-report
+  - id: add_target
+    description: Point the rule at the queue
+    call:
+      service: events
+      operation: put_targets
+      params:
+        Rule: nightly-report
+        Targets:
+        - Id: queue
+          Arn: ${steps.queue_arn.Attributes.QueueArn}
+    depends_on:
+    - create_rule
+    - queue_arn
+    rollback:
+      service: events
+      operation: remove_targets
+      params:
+        Rule: nightly-report
+        Ids:
+        - queue

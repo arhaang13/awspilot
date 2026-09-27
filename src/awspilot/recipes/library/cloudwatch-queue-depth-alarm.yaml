@@ -1,0 +1,53 @@
+id: cloudwatch-queue-depth-alarm
+area: observability
+request: Create a CloudWatch alarm named orders-backlog that fires when the SQS queue orders has more
+  than 100 visible messages on average over 5 minutes.
+baseline_minutes: 5
+guidance:
+- The metric is ApproximateNumberOfMessagesVisible in namespace AWS/SQS with dimension QueueName.
+checks:
+- description: alarm matches the request
+  call:
+    service: cloudwatch
+    operation: describe_alarms
+    params:
+      AlarmNames:
+      - orders-backlog
+  expect:
+  - path: MetricAlarms[0].MetricName
+    equals: ApproximateNumberOfMessagesVisible
+  - path: MetricAlarms[0].Namespace
+    equals: AWS/SQS
+  - path: MetricAlarms[0].Threshold
+    equals: 100.0
+  - path: MetricAlarms[0].ComparisonOperator
+    equals: GreaterThanThreshold
+  - path: MetricAlarms[0].Period
+    equals: 300
+reference:
+  summary: Create a CloudWatch alarm named orders-backlog that fires when the SQS queue orders has more
+    than 100 visible messages on average over 5 minutes.
+  steps:
+  - id: create_alarm
+    description: Create the alarm
+    call:
+      service: cloudwatch
+      operation: put_metric_alarm
+      params:
+        AlarmName: orders-backlog
+        Namespace: AWS/SQS
+        MetricName: ApproximateNumberOfMessagesVisible
+        Dimensions:
+        - Name: QueueName
+          Value: orders
+        Statistic: Average
+        Period: 300
+        EvaluationPeriods: 1
+        Threshold: 100
+        ComparisonOperator: GreaterThanThreshold
+    rollback:
+      service: cloudwatch
+      operation: delete_alarms
+      params:
+        AlarmNames:
+        - orders-backlog

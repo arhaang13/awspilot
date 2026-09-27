@@ -1,0 +1,92 @@
+id: s3-versioned-encrypted-bucket
+area: s3
+request: Create an S3 bucket named awspilot-demo-data with versioning enabled, default AES256 encryption,
+  and all public access blocked.
+baseline_minutes: 6
+guidance:
+- In us-east-1, create_bucket must not include CreateBucketConfiguration.
+- Versioning, encryption and the public access block are each a separate put_* call.
+checks:
+- description: versioning is on
+  call:
+    service: s3
+    operation: get_bucket_versioning
+    params:
+      Bucket: awspilot-demo-data
+  expect:
+  - path: Status
+    equals: Enabled
+- description: default encryption is AES256
+  call:
+    service: s3
+    operation: get_bucket_encryption
+    params:
+      Bucket: awspilot-demo-data
+  expect:
+  - path: ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm
+    equals: AES256
+- description: public access is blocked
+  call:
+    service: s3
+    operation: get_public_access_block
+    params:
+      Bucket: awspilot-demo-data
+  expect:
+  - path: PublicAccessBlockConfiguration.BlockPublicAcls
+    equals: true
+  - path: PublicAccessBlockConfiguration.RestrictPublicBuckets
+    equals: true
+reference:
+  summary: Create an S3 bucket named awspilot-demo-data with versioning enabled, default AES256 encryption,
+    and all public access blocked.
+  steps:
+  - id: create_bucket
+    description: Create the bucket
+    call:
+      service: s3
+      operation: create_bucket
+      params:
+        Bucket: awspilot-demo-data
+    rollback:
+      service: s3
+      operation: delete_bucket
+      params:
+        Bucket: awspilot-demo-data
+  - id: enable_versioning
+    description: Turn on versioning
+    call:
+      service: s3
+      operation: put_bucket_versioning
+      params:
+        Bucket: awspilot-demo-data
+        VersioningConfiguration:
+          Status: Enabled
+    depends_on:
+    - create_bucket
+  - id: enable_encryption
+    description: Set default encryption
+    call:
+      service: s3
+      operation: put_bucket_encryption
+      params:
+        Bucket: awspilot-demo-data
+        ServerSideEncryptionConfiguration:
+          Rules:
+          - ApplyServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+    depends_on:
+    - create_bucket
+  - id: block_public
+    description: Block public access
+    call:
+      service: s3
+      operation: put_public_access_block
+      params:
+        Bucket: awspilot-demo-data
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          IgnorePublicAcls: true
+          BlockPublicPolicy: true
+          RestrictPublicBuckets: true
+    depends_on:
+    - create_bucket

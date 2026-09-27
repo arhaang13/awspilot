@@ -1,0 +1,64 @@
+id: dynamodb-table-gsi
+area: dynamodb
+request: Create an on-demand DynamoDB table named Orders with partition key customerId (string) and sort
+  key orderId (string), plus a global secondary index named ByStatus on status (string) that projects
+  all attributes.
+baseline_minutes: 6
+guidance:
+- On-demand means BillingMode PAY_PER_REQUEST; do not set ProvisionedThroughput.
+- Every key attribute, including index keys, must appear in AttributeDefinitions.
+checks:
+- description: table and index match the request
+  call:
+    service: dynamodb
+    operation: describe_table
+    params:
+      TableName: Orders
+  expect:
+  - path: Table.BillingModeSummary.BillingMode
+    equals: PAY_PER_REQUEST
+  - path: Table.KeySchema[?KeyType=='HASH'] | [0].AttributeName
+    equals: customerId
+  - path: Table.KeySchema[?KeyType=='RANGE'] | [0].AttributeName
+    equals: orderId
+  - path: Table.GlobalSecondaryIndexes[0].IndexName
+    equals: ByStatus
+  - path: Table.GlobalSecondaryIndexes[0].Projection.ProjectionType
+    equals: ALL
+reference:
+  summary: Create an on-demand DynamoDB table named Orders with partition key customerId (string) and
+    sort key orderId (string), plus a global secondary index named ByStatus on status (string) that projects
+    all attributes.
+  steps:
+  - id: create_table
+    description: Create the table
+    call:
+      service: dynamodb
+      operation: create_table
+      params:
+        TableName: Orders
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+        - AttributeName: customerId
+          AttributeType: S
+        - AttributeName: orderId
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        KeySchema:
+        - AttributeName: customerId
+          KeyType: HASH
+        - AttributeName: orderId
+          KeyType: RANGE
+        GlobalSecondaryIndexes:
+        - IndexName: ByStatus
+          KeySchema:
+          - AttributeName: status
+            KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+    rollback:
+      service: dynamodb
+      operation: delete_table
+      params:
+        TableName: Orders

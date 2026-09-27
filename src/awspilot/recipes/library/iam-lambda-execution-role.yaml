@@ -1,0 +1,61 @@
+id: iam-lambda-execution-role
+area: iam
+request: Create an IAM role named thumbnail-fn-role that Lambda can assume, with the AWSLambdaBasicExecutionRole
+  managed policy attached.
+baseline_minutes: 5
+guidance:
+- AssumeRolePolicyDocument is a JSON string; the principal is the service lambda.amazonaws.com.
+- The managed policy ARN is arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole.
+checks:
+- description: role trusts Lambda
+  call:
+    service: iam
+    operation: get_role
+    params:
+      RoleName: thumbnail-fn-role
+  expect:
+  - path: Role.RoleName
+    equals: thumbnail-fn-role
+- description: basic execution policy is attached
+  call:
+    service: iam
+    operation: list_attached_role_policies
+    params:
+      RoleName: thumbnail-fn-role
+  expect:
+  - path: AttachedPolicies[].PolicyArn
+    contains: arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+reference:
+  summary: Create an IAM role named thumbnail-fn-role that Lambda can assume, with the AWSLambdaBasicExecutionRole
+    managed policy attached.
+  steps:
+  - id: create_role
+    description: Create the role
+    call:
+      service: iam
+      operation: create_role
+      params:
+        RoleName: thumbnail-fn-role
+        AssumeRolePolicyDocument: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal":
+          {"Service": "lambda.amazonaws.com"}, "Action": "sts:AssumeRole"}]}'
+    rollback:
+      service: iam
+      operation: delete_role
+      params:
+        RoleName: thumbnail-fn-role
+  - id: attach_policy
+    description: Attach the logging policy
+    call:
+      service: iam
+      operation: attach_role_policy
+      params:
+        RoleName: thumbnail-fn-role
+        PolicyArn: arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+    depends_on:
+    - create_role
+    rollback:
+      service: iam
+      operation: detach_role_policy
+      params:
+        RoleName: thumbnail-fn-role
+        PolicyArn: arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole

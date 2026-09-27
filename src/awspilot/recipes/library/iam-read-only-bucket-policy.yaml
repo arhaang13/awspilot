@@ -1,0 +1,35 @@
+id: iam-read-only-bucket-policy
+area: iam
+request: Create an IAM managed policy named read-demo-data that allows only s3:GetObject on objects in
+  the bucket awspilot-demo-data.
+baseline_minutes: 5
+guidance:
+- Object-level actions need the resource arn:aws:s3:::<bucket>/*.
+checks:
+- description: policy exists
+  call:
+    service: iam
+    operation: list_policies
+    params:
+      Scope: Local
+  expect:
+  - path: Policies[?PolicyName=='read-demo-data'] | [0].Arn
+    exists: true
+reference:
+  summary: Create an IAM managed policy named read-demo-data that allows only s3:GetObject on objects
+    in the bucket awspilot-demo-data.
+  steps:
+  - id: create_policy
+    description: Create the policy
+    call:
+      service: iam
+      operation: create_policy
+      params:
+        PolicyName: read-demo-data
+        PolicyDocument: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Action": ["s3:GetObject"],
+          "Resource": "arn:aws:s3:::awspilot-demo-data/*"}]}'
+    rollback:
+      service: iam
+      operation: delete_policy
+      params:
+        PolicyArn: ${steps.create_policy.Policy.Arn}

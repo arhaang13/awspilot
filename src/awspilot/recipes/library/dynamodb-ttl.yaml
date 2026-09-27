@@ -1,0 +1,54 @@
+id: dynamodb-ttl
+area: dynamodb
+request: Create an on-demand DynamoDB table named Sessions with partition key sessionId (string) and enable
+  time-to-live on the expiresAt attribute.
+baseline_minutes: 4
+guidance:
+- TTL is set with update_time_to_live after the table exists.
+checks:
+- description: TTL is enabled on expiresAt
+  call:
+    service: dynamodb
+    operation: describe_time_to_live
+    params:
+      TableName: Sessions
+  expect:
+  - path: TimeToLiveDescription.TimeToLiveStatus
+    equals: ENABLED
+  - path: TimeToLiveDescription.AttributeName
+    equals: expiresAt
+reference:
+  summary: Create an on-demand DynamoDB table named Sessions with partition key sessionId (string) and
+    enable time-to-live on the expiresAt attribute.
+  steps:
+  - id: create_table
+    description: Create the table
+    call:
+      service: dynamodb
+      operation: create_table
+      params:
+        TableName: Sessions
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+        KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+    rollback:
+      service: dynamodb
+      operation: delete_table
+      params:
+        TableName: Sessions
+  - id: enable_ttl
+    description: Enable TTL
+    call:
+      service: dynamodb
+      operation: update_time_to_live
+      params:
+        TableName: Sessions
+        TimeToLiveSpecification:
+          Enabled: true
+          AttributeName: expiresAt
+    depends_on:
+    - create_table

@@ -1,0 +1,148 @@
+id: vpc-public-subnet
+area: networking
+request: 'Create a VPC with CIDR 10.20.0.0/16 and one public subnet 10.20.1.0/24: attach an internet gateway
+  and add a route table with a default route to it, associated with the subnet.'
+baseline_minutes: 12
+guidance:
+- 'Order: VPC, subnet, internet gateway, attach, route table, route, association.'
+- 'Ids come from earlier responses: Vpc.VpcId, Subnet.SubnetId, InternetGateway.InternetGatewayId, RouteTable.RouteTableId.'
+checks:
+- description: VPC exists
+  call:
+    service: ec2
+    operation: describe_vpcs
+    params:
+      Filters:
+      - Name: cidr
+        Values:
+        - 10.20.0.0/16
+  expect:
+  - path: Vpcs[0].VpcId
+    exists: true
+- description: subnet exists
+  call:
+    service: ec2
+    operation: describe_subnets
+    params:
+      Filters:
+      - Name: cidr-block
+        Values:
+        - 10.20.1.0/24
+  expect:
+  - path: Subnets[0].SubnetId
+    exists: true
+- description: a route table sends 0.0.0.0/0 to an internet gateway and is associated with a subnet
+  call:
+    service: ec2
+    operation: describe_route_tables
+    params:
+      Filters:
+      - Name: route.destination-cidr-block
+        Values:
+        - 0.0.0.0/0
+  expect:
+  - path: RouteTables[0].Routes[?DestinationCidrBlock=='0.0.0.0/0'] | [0].GatewayId
+    contains: igw-
+  - path: RouteTables[0].Associations[0].SubnetId
+    exists: true
+reference:
+  summary: 'Create a VPC with CIDR 10.20.0.0/16 and one public subnet 10.20.1.0/24: attach an internet
+    gateway and add a route table with a default route to it, associated with the subnet.'
+  steps:
+  - id: create_vpc
+    description: Create the VPC
+    call:
+      service: ec2
+      operation: create_vpc
+      params:
+        CidrBlock: 10.20.0.0/16
+    rollback:
+      service: ec2
+      operation: delete_vpc
+      params:
+        VpcId: ${steps.create_vpc.Vpc.VpcId}
+  - id: create_subnet
+    description: Create the subnet
+    call:
+      service: ec2
+      operation: create_subnet
+      params:
+        VpcId: ${steps.create_vpc.Vpc.VpcId}
+        CidrBlock: 10.20.1.0/24
+    depends_on:
+    - create_vpc
+    rollback:
+      service: ec2
+      operation: delete_subnet
+      params:
+        SubnetId: ${steps.create_subnet.Subnet.SubnetId}
+  - id: create_igw
+    description: Create the internet gateway
+    call:
+      service: ec2
+      operation: create_internet_gateway
+      params: {}
+    rollback:
+      service: ec2
+      operation: delete_internet_gateway
+      params:
+        InternetGatewayId: ${steps.create_igw.InternetGateway.InternetGatewayId}
+  - id: attach_igw
+    description: Attach the gateway
+    call:
+      service: ec2
+      operation: attach_internet_gateway
+      params:
+        VpcId: ${steps.create_vpc.Vpc.VpcId}
+        InternetGatewayId: ${steps.create_igw.InternetGateway.InternetGatewayId}
+    depends_on:
+    - create_vpc
+    - create_igw
+    rollback:
+      service: ec2
+      operation: detach_internet_gateway
+      params:
+        VpcId: ${steps.create_vpc.Vpc.VpcId}
+        InternetGatewayId: ${steps.create_igw.InternetGateway.InternetGatewayId}
+  - id: create_route_table
+    description: Create the route table
+    call:
+      service: ec2
+      operation: create_route_table
+      params:
+        VpcId: ${steps.create_vpc.Vpc.VpcId}
+    depends_on:
+    - create_vpc
+    rollback:
+      service: ec2
+      operation: delete_route_table
+      params:
+        RouteTableId: ${steps.create_route_table.RouteTable.RouteTableId}
+  - id: add_route
+    description: Add the default route
+    call:
+      service: ec2
+      operation: create_route
+      params:
+        RouteTableId: ${steps.create_route_table.RouteTable.RouteTableId}
+        DestinationCidrBlock: 0.0.0.0/0
+        GatewayId: ${steps.create_igw.InternetGateway.InternetGatewayId}
+    depends_on:
+    - create_route_table
+    - attach_igw
+  - id: associate
+    description: Associate with the subnet
+    call:
+      service: ec2
+      operation: associate_route_table
+      params:
+        RouteTableId: ${steps.create_route_table.RouteTable.RouteTableId}
+        SubnetId: ${steps.create_subnet.Subnet.SubnetId}
+    depends_on:
+    - create_route_table
+    - create_subnet
+    rollback:
+      service: ec2
+      operation: disassociate_route_table
+      params:
+        AssociationId: ${steps.associate.AssociationId}

@@ -1,0 +1,75 @@
+id: sns-topic-sqs-subscription
+area: messaging
+request: Create an SNS topic named order-events and an SQS queue named order-events-inbox, and subscribe
+  the queue to the topic.
+baseline_minutes: 6
+guidance:
+- Subscribe with Protocol 'sqs' and the queue ARN as Endpoint.
+- On real AWS the queue also needs a policy allowing the topic to send messages.
+checks:
+- description: queue is subscribed to the topic
+  call:
+    service: sns
+    operation: list_subscriptions
+    params: {}
+  expect:
+  - path: Subscriptions[?Protocol=='sqs' && contains(Endpoint, 'order-events-inbox') && contains(TopicArn,
+      'order-events')] | [0].SubscriptionArn
+    exists: true
+reference:
+  summary: Create an SNS topic named order-events and an SQS queue named order-events-inbox, and subscribe
+    the queue to the topic.
+  steps:
+  - id: create_topic
+    description: Create the topic
+    call:
+      service: sns
+      operation: create_topic
+      params:
+        Name: order-events
+    rollback:
+      service: sns
+      operation: delete_topic
+      params:
+        TopicArn: ${steps.create_topic.TopicArn}
+  - id: create_queue
+    description: Create the queue
+    call:
+      service: sqs
+      operation: create_queue
+      params:
+        QueueName: order-events-inbox
+    rollback:
+      service: sqs
+      operation: delete_queue
+      params:
+        QueueUrl: ${steps.create_queue.QueueUrl}
+  - id: queue_arn
+    description: Look up the queue ARN
+    call:
+      service: sqs
+      operation: get_queue_attributes
+      params:
+        QueueUrl: ${steps.create_queue.QueueUrl}
+        AttributeNames:
+        - QueueArn
+    depends_on:
+    - create_queue
+  - id: subscribe
+    description: Subscribe the queue
+    call:
+      service: sns
+      operation: subscribe
+      params:
+        TopicArn: ${steps.create_topic.TopicArn}
+        Protocol: sqs
+        Endpoint: ${steps.queue_arn.Attributes.QueueArn}
+        ReturnSubscriptionArn: true
+    depends_on:
+    - create_topic
+    - queue_arn
+    rollback:
+      service: sns
+      operation: unsubscribe
+      params:
+        SubscriptionArn: ${steps.subscribe.SubscriptionArn}
