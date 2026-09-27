@@ -16,6 +16,16 @@ dependencies = [
     "typer>=0.12",
 ]
 
+keywords = ["aws", "agents", "llm", "langgraph", "boto3", "automation"]
+classifiers = [
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: System :: Systems Administration",
+]
+
+[project.urls]
+Repository = "https://github.com/arhaang13/awspilot"
+
 [project.optional-dependencies]
 anthropic = ["anthropic>=0.60"]
 openai = ["openai>=1.50"]

@@ -1,5 +1,9 @@
 # awspilot
 
+[![CI](https://github.com/arhaang13/awspilot/actions/workflows/ci.yml/badge.svg)](https://github.com/arhaang13/awspilot/actions/workflows/ci.yml)
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
+
 Describe an AWS setup in plain English. awspilot plans the API calls, checks the plan
 against safety rules, shows it to you for approval, runs it, and then reads the
 resources back to confirm they match what you asked for.
@@ -113,6 +117,15 @@ fails. Results go to `bench/results/` and [docs/benchmark.md](docs/benchmark.md)
 
 **No results are published yet.** I will add them here, with the date, model and run
 count, once the benchmark has been run with a live model.
+
+## Testing
+
+| Suite | What it covers | Command |
+|---|---|---|
+| Unit (81 tests) | Safety rules, call validation, reference resolution, the full pipeline including repair, rollback, rejection and cleanup, every recipe's reference plan and checks | `uv run pytest` |
+| Integration | Every recipe's reference plan against LocalStack | `uv run pytest -m integration` |
+
+Both run in CI on every push, with `ruff` and `mypy --strict`.
 
 ## Workflow recipes
 
