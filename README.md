@@ -123,9 +123,10 @@ count, once the benchmark has been run with a live model.
 | Suite | What it covers | Command |
 |---|---|---|
 | Unit (81 tests) | Safety rules, call validation, reference resolution, the full pipeline including repair, rollback, rejection and cleanup, every recipe's reference plan and checks | `uv run pytest` |
-| Integration | Every recipe's reference plan against LocalStack | `uv run pytest -m integration` |
+| Integration (15 tests) | Every recipe's reference plan run against a real LocalStack, end to end: plan → safety → execute → verify → cleanup | `uv run pytest -m integration` |
 
-Both run in CI on every push, with `ruff` and `mypy --strict`.
+Both suites, `ruff`, and `mypy --strict` run in [CI](https://github.com/arhaang13/awspilot/actions)
+on every push and are currently green.
 
 ## Workflow recipes
 
@@ -137,8 +138,8 @@ runs every reference plan and confirms the checks fail before it and pass after 
 
 ## Limitations
 
-- Tested against moto (in-process) only so far. The LocalStack test suite exists but
-  has not been run yet, and nothing has been run against real AWS.
+- Verified against moto (in-process) and LocalStack. Nothing has been run against a
+  real AWS account yet, and no benchmark has been run with a live model.
 - One API call per step, with JSON parameters. Workflows that need to upload files,
   such as deploying Lambda code, are not supported yet.
 - Waiting for slow resources to become ready is not handled yet.

@@ -1,6 +1,6 @@
 [project]
 name = "awspilot"
-version = "0.1.0"
+version = "0.1.1"
 description = "Agentic AWS workflow automation: plain-English request -> reviewed plan -> verified resources."
 readme = "README.md"
 license = { text = "MIT" }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1
+
+- Fixed the LocalStack integration suite: it called a state-reset endpoint that
+  does not exist on current LocalStack images, then a race where the health
+  endpoint reported ready before individual services had finished restarting.
+  All 15 integration tests now pass in CI, on every push.
+
 ## 0.1.0
 
 First release.
